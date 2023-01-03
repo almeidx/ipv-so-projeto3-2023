@@ -1,0 +1,15 @@
+{
+  "cSpell.words": ["conteudo", "PERMISSOES"],
+  "files.associations": {
+    ".clang-format": "yaml",
+    "api-extractor.json": "jsonc",
+    "ipc.h": "c",
+    "types.h": "c",
+    "shared.h": "c",
+    "unistd.h": "c",
+    "stat.h": "c",
+    "cliente.c": "c",
+    "servidor.c": "c"
+  },
+  "C_Cpp.default.cStandard": "c99"
+}

@@ -1,0 +1,73 @@
+Servidor
+
+...
+
+criar filas
+
+criar shm
+
+...
+
+...
+
+REPETIR
+
+               Ler mensagens da fila 1
+
+               verificar se a msg é connect, shutdown, etc.
+
+se
+
+connect
+
+               colocar processo na SHM
+
+shutdown
+
+               tirar processo da SHM
+
+procura
+
+               enviar clientes ordem de pesquisa
+
+quero (ESTA parte pode ser entre clientes)
+
+               enviar ao cliente o pedido de envio do ficheiro
+
+---
+
+Cliente
+
+ligar-se às filas
+
+enviar connect ao servidor
+
+tratar sinais, se for caso disso
+
+em ciclo (Pai)
+
+               lê do teclado
+
+               e envia para o servidor os pedidos
+
+filho
+
+               ...
+
+               em ciclo
+
+               Lê da fila
+
+               se
+
+               procura
+
+                              pesquisa o ficheiro na pasta
+
+                                            e envia resposta para o servidor caso possua o ficheiro
+
+               quero
+
+                              lê ficheiro do outro cliente na msg2
+
+                              ou envia ficheiro para o cliente que fez o pedido na msg2
