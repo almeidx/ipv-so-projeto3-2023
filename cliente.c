@@ -1,28 +1,11 @@
+#include "msg.h"
 #include <dirent.h>
 
-#include "msg.h"
-
-struct s_file {
-	char nome[256];
-	char conteudo[1024];
-};
-
-int filtro_fich(const struct dirent *entry) {
-	// Ignorar '.' e '..' (pasta atual e pasta anterior, respetivamente)
-	return strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0;
-}
-
-void handle_sigusr1() {
-	printf("Recebi o sinal SIGUSR1. A terminar os processos...\n");
-
-	kill(getppid(), SIGTERM);
-
-	exit(EXIT_SUCCESS);
-}
-
-void pid_to_string(long pid, char *str) {
-	sprintf(str, "%ld", pid);
-}
+int filtro_fich(const struct dirent *entry);
+void tratar_sigusr1();
+void pid_to_string(long pid, char *str);
+char *get_nome_fich_args(struct s_msg *msg);
+int contar_n_args(char *str);
 
 int main(int argc, char *argv[]) {
 	int mq1_id, mq2_id;
@@ -31,10 +14,9 @@ int main(int argc, char *argv[]) {
 	long pid_c2 = (long)fork(), pid = (long)getpid();
 
 	if (pid_c2 == 0) { // C2
-
 		// Tratar o sinal SIGUSR1
 		struct sigaction sa;
-		sa.sa_handler = handle_sigusr1;
+		sa.sa_handler = tratar_sigusr1;
 		sigemptyset(&sa.sa_mask);
 		sa.sa_flags = 0;
 		sigaction(SIGUSR1, &sa, NULL);
@@ -77,18 +59,19 @@ int main(int argc, char *argv[]) {
 			exit_on_error(ret, "Erro ao tentar receber mensagem");
 
 			if (str_starts_with(msg.texto, "procura")) {
-				long pid_req = get_last_pid_from_msg(msg.texto);
+				long pid_req = get_ultimo_pid_msg(msg.texto);
 				if (pid_req == -1)
 					continue;
 
-				// procura abcde 1111
-				char *filename = strtok(msg.texto, " ");
-				filename = strtok(NULL, " ");
+				// Exemplo de uso: procura abcde 1111
+				char *filename = get_nome_fich_args(&msg);
+				if (filename == NULL)
+					continue;
 
 				for (int i = 0; i < n_ficheiros; i++) {
 					if (strcmp(ficheiros[i].nome, filename) == 0) {
 						char pid_str[10];
-						pid_to_string(pid_c2, pid_str);
+						pid_to_string(pid_c2_real, pid_str);
 
 						strcpy(msg.texto, "resposta ");
 						strcat(msg.texto, ficheiros[i].nome);
@@ -105,13 +88,14 @@ int main(int argc, char *argv[]) {
 					}
 				}
 			} else if (str_starts_with(msg.texto, "quero")) {
-				long pid_req = get_last_pid_from_msg(msg.texto);
+				long pid_req = get_ultimo_pid_msg(msg.texto);
 				if (pid_req == -1)
 					continue;
 
 				// quero abcde 1214 1111
-				char *filename = strtok(msg.texto, " ");
-				filename = strtok(NULL, " ");
+				char *filename = get_nome_fich_args(&msg);
+				if (filename == NULL)
+					continue;
 
 				for (int i = 0; i < n_ficheiros; i++) {
 					if (strcmp(ficheiros[i].nome, filename) == 0) {
@@ -146,9 +130,19 @@ int main(int argc, char *argv[]) {
 			scanf(" %[^\n]s", msg.texto);
 
 			if (strcmp(msg.texto, "connect") == 0) {
+				if (contar_n_args(msg.texto) != 1) {
+					printf("Erro: comando inválido (uso: connect)\n");
+					continue;
+				}
+
 				sprintf(msg.texto, "connect %ld", pid_c2);
 				msg.tipo = SRV_MSG_TYPE;
 			} else if (str_starts_with(msg.texto, "procura")) {
+				if (contar_n_args(msg.texto) != 2) {
+					printf("Erro: comando inválido (uso: procura PID)\n");
+					continue;
+				}
+
 				// Converter o PID para string
 				char pid_str[10];
 				pid_to_string(pid_c2, pid_str);
@@ -158,7 +152,12 @@ int main(int argc, char *argv[]) {
 
 				msg.tipo = SRV_MSG_TYPE;
 			} else if (str_starts_with(msg.texto, "quero")) {
-				long req_pid = get_last_pid_from_msg(msg.texto);
+				if (contar_n_args(msg.texto) != 3) {
+					printf("Erro: comando inválido (uso: quero NOME PID)\n");
+					continue;
+				}
+
+				long req_pid = get_ultimo_pid_msg(msg.texto);
 				if (req_pid == -1)
 					continue;
 
@@ -170,6 +169,11 @@ int main(int argc, char *argv[]) {
 
 				msg.tipo = req_pid;
 			} else if (strcmp(msg.texto, "shutdown") == 0) {
+				if (contar_n_args(msg.texto) != 1) {
+					printf("Erro: comando inválido (uso: shutdown)\n");
+					continue;
+				}
+
 				sprintf(msg.texto, "shutdown %ld", pid_c2);
 				msg.tipo = SRV_MSG_TYPE;
 			} else {
@@ -183,4 +187,51 @@ int main(int argc, char *argv[]) {
 	}
 
 	return 0;
+}
+
+int filtro_fich(const struct dirent *entry) {
+	// Ignorar '.' e '..' (pasta atual e pasta anterior, respetivamente)
+	return strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0;
+}
+
+void tratar_sigusr1() {
+	printf("Recebi o sinal SIGUSR1. A terminar os processos...\n");
+
+	kill(getppid(), SIGTERM);
+
+	exit(EXIT_SUCCESS);
+}
+
+void pid_to_string(long pid, char *str) {
+	sprintf(str, "%ld", pid);
+}
+
+/* O nome do ficheiro será o segundo parâmetro. Exemplo: procura abc.txt */
+char *get_nome_fich_args(struct s_msg *msg) {
+	char *arg = strtok(msg->texto, " ");
+	if (arg == NULL) {
+		printf("Erro: não foi possível obter o nome do ficheiro\n");
+		return NULL;
+	}
+
+	arg = strtok(NULL, " ");
+
+	if (arg == NULL) {
+		printf("Erro: não foi possível obter o nome do ficheiro\n");
+		return NULL;
+	}
+
+	return arg;
+}
+
+int contar_n_args(char *str) {
+	int n = 0;
+	size_t len = strlen(str);
+
+	for (int i = 0; i < len; i++) {
+		if (str[i] == ' ')
+			n++;
+	}
+
+	return n;
 }

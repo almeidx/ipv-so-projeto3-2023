@@ -15,7 +15,8 @@
     "dirent.h": "c",
     "servidor.h": "c",
     "signal.h": "c",
-    "typeinfo": "c"
+    "typeinfo": "c",
+    "ostream": "cpp"
   },
   "C_Cpp.default.cStandard": "c99"
 }
