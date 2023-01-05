@@ -1,0 +1,5 @@
+#!/bin/bash
+
+ipcrm -Q 10
+ipcrm -Q 11
+ipcrm -M 42
